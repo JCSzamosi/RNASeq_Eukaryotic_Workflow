@@ -50,3 +50,20 @@ Run [cutadapt](https://cutadapt.readthedocs.io/en/stable/) to trim Illumina
 adapters and low-quality ends off the reads. There is a script to do this on
 [paired-end](./scripts/02_cutadapt_pe.sh) or
 [single-end](./scripts/02_cutadapt_se.sh) reads.
+
+3. FastQC Again
+---------------
+
+Run FastQC on the trimmed reads. There should be no Ns, no adapter sequences,
+and you shouldn't have lost a huge amount of data. Sequence lengths will not be
+uniform anymore, but you should still have sufficient sequences of sufficient
+length to do your analysis.
+
+4. Mapping
+----------
+
+I map to the genome using [STAR aligner](https://github.com/alexdobin/STAR),
+which is a splice-aware read mapper. It aligns reads across splice junctions. If
+you're only looking at gene expression, and don't care about splice junction
+discovery, single-pass mapping is sufficient. The script to run STAR is at
+[./scripts/04_map.sh](./scripts/04_map.sh)
