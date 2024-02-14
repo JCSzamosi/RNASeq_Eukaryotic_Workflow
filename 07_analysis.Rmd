@@ -1,0 +1,148 @@
+RNASeq differential expression analysis
+=======================================
+
+## Setup
+
+```{r, message=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning =FALSE)
+library(DESeq2)
+library(tidyverse)
+theme_set(theme_bw())
+library(goseq)
+# library(DESeqAnalysis)
+```
+
+## Import data
+
+```{r}
+# Bring in the sample data and clean it up
+samdat = read.csv('data/sample_data.csv', row.names = 1)
+samdat
+# make sure the rownames are the sampleIDs
+
+# Bring in the count data
+cts = read.csv('results/06_featurecounts/gene_counts.csv')
+# make sure the colnames match the rownames in samdat
+```
+
+## Differential Expression
+
+The details of this will depend on your scientific question, but here are the
+basic functions you'll almost always need:
+
+```{r, warning=FALSE, message=FALSE}
+samdat
+# head(gene_counts)
+
+# Remove all rows with only zeros (if you used my scripts, this is done already,
+# but it doesn't hurt to do it again).
+gene_ct_nz = gene_counts[rowSums(gene_counts) > 0,]
+dim(gene_ct_nz)
+
+# Create the DESeq2 object
+dds = DESeqDataSetFromMatrix(gene_ct_nz, samdat, ~design_formula)
+dds = DESeq(dds)
+```
+
+```{r}
+res = lfcShrink(dds, type = 'apeglm', contrast = ctrst)
+res_df = data.frame(res)
+
+```
+
+#### Plots
+
+Volcano plots for each pairwise comparison
+
+```{r}
+ggplot(res_df, aes(x = log2FoldChange, y = -log(padj))) +
+    geom_point() +
+    facet_wrap(~contrast)
+```
+PCA plot on variance-stabilized data
+
+```{r}
+DESeq2::plotPCA(varianceStabilizingTransformation(dds),intgroup = 'Group') +
+    scale_colour_brewer(palette = 'Dark2')
+```
+
+## Goseq
+
+If you have mouse or human data, or something else for which a GO database
+already exists in goseq, you can look at the differential expression of
+functional pathways.
+
+You need to make sure gene IDs are unique. Here is apparently one way I did
+that, although I don't understand it now:
+
+```{r}
+# Set up the Gene ID lookup table (csv was produced manually from the GTF file)
+gene_id_lookup = read.csv('refs/unique_gene_ids.csv')
+dim(gene_id_lookup)
+head(gene_id_lookup)
+n_distinct(gene_id_lookup$gene_id)
+n_distinct(gene_id_lookup$GeneID)
+n_distinct(gene_id_lookup)
+gene_id_v = gene_id_lookup$GeneID
+names(gene_id_v) = gene_id_lookup$gene_id
+(duplicate_geneIDs = (gene_id_lookup 
+                     %>% count(GeneID) 
+                     %>% filter(n > 1) 
+                     %>% left_join(gene_id_lookup)))
+```
+
+## Goseq
+
+```{r}
+# Get all the genes included in analysis
+all_genes_des = rownames(res_df)
+# length(all_genes_des)
+
+# Get all the genes with sufficient data for analysis
+genes = (res_df
+         %>% filter(!is.na(padj))
+         %>% rownames())
+# length(genes)
+
+# Get all the significantly differently expressed genes
+sig_genes_des = (res_undif_df
+             %>% filter(padj < 0.05)
+             %>% rownames())
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+# Make a binary vector of all genes, 1 for significant, 0 for non
+deg_v_des = genes %in% sig_genes_des
+deg_v_des = as.numeric(deg_v_des)
+names(deg_v_des) = genes
+
+# remove the duplicate genes
+deg_v_des = deg_v_des[!(genes %in% duplicate_geneIDs$gene_id)]
+names(deg_v_des) = gene_id_v[names(deg_v_des)]
+# head(deg_v_des)
+any(is.na(names(deg_v_des)))
+
+# Get the bias and length estimations for goseq. Make sure to replace mm39 with
+# your correct genome ID.
+np_des = nullp(deg_v_des, 'mm39', 'refGene')
+
+# Run goseq
+gs_des = goseq(np_des, 'mm39', 'refGene')
+
+# head(gs_des)
+dim(gs_des)
+gs_fixed_des = (gs_des
+            %>% mutate(padj = p.adjust(over_represented_pvalue, 'BH')))
+# head(gs_fixed_des)
+
+# Count the significant categories
+sum(gs_fixed_des$padj < 0.05)
+
+# head(gs_fixed_des)
+write.csv(filter(gs_fixed_des, padj < 0.05), 
+          file = 'results/07_analysis/goseq_de_significant.csv')
+write.csv(gs_fixed_des, 
+          file = 'results/07_analysis/goseq_de_all.csv')
+```

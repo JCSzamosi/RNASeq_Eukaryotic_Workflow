@@ -17,9 +17,10 @@ Index Genome
 ------------
 
 Before you start, you need to download and index your reference genome.  This
-only needs to be done once per genome/mapper pair. So if you're using the same
-genome version with the same mapping software (and version) as a previous
-project, you don't need to do this again. Ideally, the
+only needs to be done once per genome/mapper pair, per sample read length. So if
+you're using the same genome version with the same mapping software (and
+version), and the sample reads are the same length, as a previous project, you
+don't need to do this again. Ideally, the
 [index_genome_star.sh](./scripts/index_genome_star.sh) script will live in the
 directory with the genome, although you may want a copy of it in your project
 directory as well for reference/replicability. I'm using STAR to index the
@@ -43,6 +44,9 @@ files.
 
 The script to do this is at [./scripts/01_fastqc.sh](./scripts/01_fastqc.sh)
 
+Run multiqc after this step. The script is at
+[./scripts/multiqc](./scripts/multiqc).
+
 2. Cutadapt
 -----------
 
@@ -59,6 +63,11 @@ and you shouldn't have lost a huge amount of data. Sequence lengths will not be
 uniform anymore, but you should still have sufficient sequences of sufficient
 length to do your analysis.
 
+Run multiqc after this step. The script is at
+[./scripts/multiqc](./scripts/multiqc). This will overwrite your previous
+multiqc, but it will re-analyze the same data that got analyzed the first time,
+so all those outputs will still be included in the report.
+
 4. Mapping
 ----------
 
@@ -69,41 +78,36 @@ discovery, single-pass mapping is sufficient. The script to run STAR is at
 [./scripts/04_map.sh](./scripts/04_map.sh). The manual is very accessible and is
 a good place to go for explanations of various parameter value choices.
 
-5. MultiQC
-----------
+Run multiqc after this step. The script is at
+[./scripts/multiqc](./scripts/multiqc). This will overwrite your previous
+multiqc, but it will re-analyze the same data that got analyzed the first time,
+so all those outputs will still be included in the report.
 
-I run multiQC individually on three sets of data:
+6. Read Counting
+----------------
 
-* the original (concatenated), untrimmed reads
-* the trimmed reads
-* the mapped reads
+I use featureCount from the RSubreads package to count reads. The script is at
+[./scripts/06_featurecounts.R](./scripts/06_featurecounts.R), and can be run
+from inside RStudio or from the command line using Rscript. It expects its
+working directory to be the top-level directory of the project, just like
+everything else in [./scripts/](./scripts).
 
-You can also run everything together, but I find the output messy and prefer to
-look at them individually. The script to do this is in
-[./scripts/05_multiqc.sh](./scripts/05_multiqc.sh).
+The version that I have provided here only counts reads mapped to genes;
+however, it is possible to use this function to count exon usage or junction
+usage, assuming you did junction discovery with your read mapping.
 
-6. Read Counting & Analysis
----------------------------
+7. Analysis
+-----------
 
-A rough example script is in [./06_analysis.Rmd](./06_analysis.Rmd). I typically
+A rough example script is in [./07_analysis.Rmd](./07_analysis.Rmd). I typically
 keep this script in the top level directory for the project, and its html output
 is generated there as well.
-
-### 6.1 Read Counting
-
-I use featureCount from the RSubreads package to count reads.
-[./06_analysis.Rmd](./06_analysis.Rmd) contains a function to count reads mapped
-to gene. For more detailed analysis it is also possible to use this function to
-count reads mapped to exons (or any other feature in the featureType column of
-the GTF file. Intermediate data structures are stored in
-[./results/06_analysis/](./results/06_analysis/).
-
-### 6.2 Differential Expression Analysis
 
 The details of this analysis will vary substantially from project to project,
 but I typically use DESeq2 to conduct differential expression analysis. It's a
 good idea to remove unwanted variation if the project is at all complicated
-(multiple processing batches, illumina runs, etc.). Typically you want to remove
-any rows that are 0 everywhere, make sure your sample data are leveled the way
-you want, make sure any continuous predictors are z-scored to remove numerical
-estimation problems, and set up contrasts the way you want them.
+(multiple processing batches, illumina runs, etc.). I do this using the RUV
+package. Typically you also want to remove any rows that are 0 everywhere, make
+sure your sample data are leveled the way you want, make sure any continuous
+predictors are z-scored to remove numerical estimation problems, and set up
+contrasts the way you want them.

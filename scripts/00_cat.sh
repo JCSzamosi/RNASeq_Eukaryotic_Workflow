@@ -5,7 +5,7 @@
 ## This script assumes that all fastq.gz files are stored in a flat 
 ## hierarchy in a directory called orig_data. If they are not, you can put
 ## symlinks there to mimic that structure, or you can make changes to the
-## script to include the directories.
+## script to accommodate your directory structure.
 
 orig=orig_data
 l1=L001_R1_001.fastq.gz
